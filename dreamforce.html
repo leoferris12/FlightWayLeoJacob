@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DreamForce — Career Accelerator</title>
+<title>FlyWay — Career Accelerator</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
@@ -2275,9 +2275,38 @@ function qzDialClick(e){
   if(angle>0) angle = dx<0 ? -180 : 0;
   const v=Math.max(0,Math.min(100,((angle+180)/180)*100));
   qzSliders.intensity=qzR(v);
-  qzRenderQ(qzCur); qzCheckCombos();
+  // Sync the range input value too, then update visuals in-place.
+  const wrap=document.getElementById('qz-dial-svg')?.parentElement;
+  const range=wrap?.querySelector('input[type=range]');
+  if(range) range.value=qzSliders.intensity;
+  qzDialSlide(qzSliders.intensity);
 }
-function qzDialSlide(v){qzSliders.intensity=parseInt(v);qzRenderQ(qzCur);qzCheckCombos();}
+function qzDialSlide(v){
+  v=parseInt(v);
+  qzSliders.intensity=v;
+  // Update dial visuals in-place WITHOUT re-rendering the whole question
+  // (re-rendering destroys the <input type=range> mid-drag and breaks the slider).
+  const svg=document.getElementById('qz-dial-svg');
+  if(svg){
+    const labels=['Calm','Easy','Active','High','Pressure'];
+    const lblIdx=Math.max(0,Math.min(labels.length-1,Math.floor(v/(100/labels.length))));
+    const angleRad=(v/100*180-180)*Math.PI/180;
+    const cx=120,cy=120,rad=100;
+    const rx=cx+rad*Math.cos(angleRad), ry=cy+rad*Math.sin(angleRad);
+    const paths=svg.querySelectorAll('path');
+    if(paths[1]) paths[1].setAttribute('d',`M 20 120 A 100 100 0 0 1 ${rx.toFixed(2)} ${ry.toFixed(2)}`);
+    const line=svg.querySelector('line');
+    if(line){line.setAttribute('x2',rx.toFixed(2));line.setAttribute('y2',ry.toFixed(2));}
+    const wrap=svg.parentElement;
+    if(wrap){
+      const valEl=wrap.querySelector('.dial-val'); if(valEl) valEl.textContent=v;
+      const lblEl=wrap.querySelector('.dial-lbl'); if(lblEl) lblEl.textContent=labels[lblIdx];
+      const range=wrap.querySelector('input[type=range]');
+      if(range) range.style.background=`linear-gradient(90deg,#3b82f6 ${v}%,#e2e8f0 ${v}%)`;
+    }
+  }
+  qzCheckCombos();
+}
 
 function qzPickYesNo(i,val){
   qzAnswers.yesno[i]=val;
@@ -2306,9 +2335,33 @@ function qzYesNoToggleCustom(i){
   qzRenderQ(qzCur);
 }
 function qzYesNoCustomInput(i,val){
-  if(val&&val.trim()) qzAnswers.yesno[i]={custom:val.trim()};
+  // Store raw value (preserve whitespace while typing). Only treat fully-empty
+  // (after trim) as "no answer" so the Next button hides, but do NOT re-render
+  // the whole question on every keystroke — that destroys the textarea and
+  // makes it lose focus after each character.
+  const had=!!(qzAnswers.yesno[i]&&typeof qzAnswers.yesno[i]==='object'&&qzAnswers.yesno[i].custom);
+  if(val&&val.trim()) qzAnswers.yesno[i]={custom:val};
   else delete qzAnswers.yesno[i];
-  qzRenderQ(qzCur); qzCheckCombos();
+  const hasNow=!!(qzAnswers.yesno[i]&&typeof qzAnswers.yesno[i]==='object'&&qzAnswers.yesno[i].custom);
+  // Toggle the inline Next button without re-rendering, to keep focus.
+  if(had!==hasNow){
+    const ta=document.activeElement;
+    const wrap=ta&&ta.classList&&ta.classList.contains('yn-custom-input')?ta.parentElement:null;
+    if(wrap){
+      const existing=wrap.querySelector('button.qz-btn-next');
+      if(hasNow && !existing){
+        const btn=document.createElement('button');
+        btn.className='qz-btn-next';
+        btn.setAttribute('style','margin-top:8px;width:100%;padding:12px');
+        btn.textContent='Next →';
+        btn.onclick=qzYesNoAdvance;
+        wrap.appendChild(btn);
+      } else if(!hasNow && existing){
+        existing.remove();
+      }
+    }
+  }
+  qzCheckCombos();
 }
 function qzPickSpec(i){qzAnswers.spectrum=i;qzRenderQ(qzCur);qzCheckCombos();}
 
