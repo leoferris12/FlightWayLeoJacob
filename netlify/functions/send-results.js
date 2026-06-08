@@ -169,7 +169,23 @@ exports.handler = async (event) => {
     if (!resp.ok) {
       const detail = await resp.text();
       console.error('Resend API error', resp.status, detail);
-      return json(502, { error: 'Email service returned an error.' }, origin);
+
+      let detailText = 'Email service returned an error.';
+      try {
+        const parsed = JSON.parse(detail);
+        detailText = parsed.message || parsed.error || detail;
+      } catch {
+        detailText = detail || detailText;
+      }
+
+      return json(
+        502,
+        {
+          error:
+            `Resend rejected the email request: ${detailText}. If you are using a custom sender email, verify that domain in Resend and make sure FROM_EMAIL matches a verified sender.`,
+        },
+        origin,
+      );
     }
 
     return json(200, { ok: true }, origin);
